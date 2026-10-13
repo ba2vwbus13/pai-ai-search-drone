@@ -1,0 +1,77 @@
+{
+  "world": "okinawa_sar",
+  "home_lat": 26.5246226,
+  "home_lon": 128.0297311,
+  "frame": "NED(north=y, east=x) [m] — PX4 ローカル座標と同じ",
+  "persons": [
+    {
+      "id": "P1",
+      "model": "Rescue Randy",
+      "north": 42.0,
+      "east": -35.0,
+      "note": "倒れている人"
+    },
+    {
+      "id": "P2",
+      "model": "Rescue Randy",
+      "north": 97.0,
+      "east": 28.0,
+      "note": "倒れている人"
+    },
+    {
+      "id": "P3",
+      "model": "Casual female",
+      "north": 58.0,
+      "east": 12.0,
+      "note": "立っている人"
+    },
+    {
+      "id": "P4",
+      "model": "Male visitor",
+      "north": 112.0,
+      "east": -22.0,
+      "note": "立っている人"
+    },
+    {
+      "id": "P5",
+      "model": "Walking person",
+      "north": 27.0,
+      "east": 45.0,
+      "note": "歩いている人"
+    },
+    {
+      "id": "P6",
+      "model": "Standing person",
+      "north": 82.0,
+      "east": -48.0,
+      "note": "立っている人"
+    }
+  ],
+  "vehicles": [
+    {
+      "model": "SUV",
+      "north": 35.0,
+      "east": 2.5
+    },
+    {
+      "model": "Pickup",
+      "north": 88.0,
+      "east": -2.5
+    },
+    {
+      "model": "Hatchback blue",
+      "north": 118.0,
+      "east": 40.0
+    },
+    {
+      "model": "Prius Hybrid",
+      "north": 125.0,
+      "east": -45.0
+    },
+    {
+      "model": "Ambulance",
+      "north": -8.0,
+      "east": 9.0
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+# AI 捜索ドローンのパラメータ
+ai_detector:
+  ros__parameters:
+    conf_threshold: 0.30        # YOLO の確信度しきい値
+    detect_rate_hz: 1.0         # 推論の周期(タイル9枚で約1秒)
+    hfov: 1.74                  # カメラの水平画角 [rad](PX4 mono_cam)
+    cam_tilt_deg: 30.0          # カメラの傾き(真下から機首方向へ)[deg]
+    max_range: 40.0             # これより遠い検出は位置誤差が大きいので使わない [m]
+    tile_alt_threshold: 12.0    # これより高いと 3x3 分割、低いと 2x2 分割
+    min_alt: 4.0                # これより低いときは推論しない(離着陸時)
+
+ai_mission:
+  ros__parameters:
+    area_center_north: 70.0     # 捜索範囲の中心(離陸地点からの北方向)[m]
+    area_center_east: 0.0
+    area_size: 120.0            # 捜索範囲(正方形)の一辺 [m]
+    patrol_alt: 18.0            # 巡回高度 [m]
+    inspect_alt: 10.0           # 確認高度 [m]
+    cam_tilt_deg: 30.0          # カメラの傾き [deg](確認時の立ち位置の計算に使う)
+    overlap: 0.2                # 隣の掃引線との撮影範囲の重なり
+    patrol_speed: 7.0           # 巡回速度 [m/s]
+    transit_speed: 9.0          # 移動速度 [m/s]
+    vertical_speed: 3.0         # 昇降速度 [m/s]
+    candidate_conf: 0.45        # 巡回中に「候補」とする確信度
+    confirm_conf: 0.60          # 確認高度で「確定」とする確信度
+    confirm_count: 2            # 確定に必要な検出回数
+    merge_radius: 8.0           # これより近い検出は同じ対象とみなす [m]
+    observe_s: 3.0              # 確認高度での最低観測時間 [s]
+    observe_timeout_s: 6.0      # これを過ぎても確定できなければ棄却 [s]

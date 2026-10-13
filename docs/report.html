@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>PAI最終課題 説明資料 AI捜索ドローン</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  :root { --accent: #c2410c; --ink: #1f2328; --sub: #57606a; --line: #d0d7de; --bg: #f6f8fa; }
+  body { font-family: "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic", sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.65; margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 2mm; letter-spacing: .02em; }
+  .subtitle { color: var(--accent); font-size: 12pt; font-weight: 700; margin-bottom: 4mm; }
+  .meta { color: var(--sub); font-size: 9pt; margin-bottom: 5mm; }
+  h2 { font-size: 13pt; border-left: 5px solid var(--accent); padding-left: 3mm; margin: 6mm 0 2.5mm;
+       break-after: avoid; }
+  h3 { font-size: 11pt; margin: 4mm 0 1.5mm; break-after: avoid; }
+  p { margin: 1.5mm 0; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 3mm; font-size: 9pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 1.2mm 2mm; text-align: center; }
+  th { background: var(--bg); }
+  td.l, th.l { text-align: left; }
+  .hl { color: var(--accent); font-weight: 700; }
+  figure { margin: 2mm 0 3mm; text-align: center; break-inside: avoid; }
+  figure img { max-width: 100%; border: 1px solid var(--line); }
+  figcaption { font-size: 8.5pt; color: var(--sub); margin-top: 1mm; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .box { background: var(--bg); border: 1px solid var(--line); border-radius: 2mm; padding: 2.5mm 4mm; margin: 2mm 0; }
+  .flow { display: flex; align-items: stretch; gap: 1.5mm; font-size: 8.5pt; margin: 2mm 0; }
+  .flow div { flex: 1; border: 1.5px solid var(--accent); border-radius: 2mm; padding: 1.5mm; text-align: center;
+              background: #fff7ed; }
+  .flow span { align-self: center; color: var(--accent); font-weight: 700; }
+  ul, ol { margin: 1mm 0; padding-left: 6mm; }
+  li { margin: .5mm 0; }
+  code { font-family: Menlo, monospace; font-size: 8.5pt; background: var(--bg); padding: 0 1mm; }
+  .pb { break-before: page; }
+</style>
+</head>
+<body>
+
+<h1>AI 捜索ドローン</h1>
+<div class="subtitle">災害時の要救助者を、AI で見つけて・確かめて・位置を知らせる</div>
+<div class="meta">Physical AI 応用講座1 最終課題 説明資料 ／ PX4 SITL + Gazebo Harmonic + ROS 2 Humble + YOLO11
+  ／ 動画: YouTube(提出フォームに記載) ／ コード: GitHub(提出フォームに記載)</div>
+
+<figure>
+  <img src="img/demo_frame.png" style="width: 100%">
+  <figcaption>図1 デモ動画の 1 場面(左: 斜め 30° カメラの映像と AI の検出枠(赤: 人、青: 車)、右上: Gazebo の 3D 画面、右下: 捜索マップと状態)</figcaption>
+</figure>
+
+<h2>1. 課題の概要と目的</h2>
+<p>地震や豪雨のあとは、倒れている人や取り残された人を短い時間で見つけて、救助隊に正確な位置を伝える必要があります。
+人が上空から目視で捜すと、見落としや疲労が避けられません。この課題では、<b>ドローンが自律的に捜索範囲を巡回し、
+カメラ映像を AI で解析して人を見つけ、近づいて確かめ、緯度・経度を報告する</b>システムを作りました。</p>
+<div class="box">
+<b>タスク</b>：離陸地点の北側 120 m 四方を捜索します。範囲には、要救助者 6 名(倒れている人 2・立っている人 3・歩いている人 1)のほか、
+車 5 台・建物 4 棟・樹木を置いています。ドローンは人を全員見つけ、位置を記録してから戻ります。
+人の位置は実行時のプログラムには与えておらず、評価にだけ使います。
+</div>
+
+<h2>2. システム構成</h2>
+<div class="flow">
+  <div><b>Gazebo</b><br>捜索ワールド<br>斜め 30° カメラ</div><span>→</span>
+  <div><b>detector</b><br>YOLO11m タイル推論<br>画素 → 地上位置</div><span>→</span>
+  <div><b>mission</b><br>巡回・確認の<br>状態遷移</div><span>→</span>
+  <div><b>PX4 SITL</b><br>オフボード制御<br>(位置目標 10 Hz)</div>
+</div>
+<p>3 つの ROS 2 ノードで構成しています。</p>
+<ul>
+  <li><code>detector</code>：カメラ画像を AI で解析する。</li>
+  <li><code>mission</code>：飛行の手順を決め、PX4 に位置目標を送る。</li>
+  <li><code>dashboard</code>：表示画面を描く。</li>
+</ul>
+<p>PX4 とは uXRCE-DDS でつなぎ、Gazebo のカメラ画像は <code>ros_gz_image</code> で ROS 2 に流しています。
+<code>mission</code> の状態遷移は次のとおりです。</p>
+<table>
+  <tr><th>状態</th><th class="l">動作</th></tr>
+  <tr><td>巡回</td><td class="l">高度 18 m・秒速 7 m で往復ルートを飛ぶ。毎秒 1 回、AI で人を検出する</td></tr>
+  <tr><td>候補へ移動</td><td class="l">確信度 0.45 以上の人が見つかったら巡回を中断する。候補が画像の中央に写る位置へ、機首を候補に向けて移動する</td></tr>
+  <tr><td>降下・再確認</td><td class="l">高度 10 m まで降りる。確信度 0.6 以上で 2 回検出したら「確定」、6 秒たっても検出できなければ「誤検出」として棄却する</td></tr>
+  <tr><td>巡回へ復帰</td><td class="l">巡回高度へ上昇し、中断した地点から巡回を再開する。全ルートが終わったら帰還・着陸し、報告書(JSON)を保存する</td></tr>
+</table>
+
+<h2>3. 工夫した点</h2>
+<h3>(1) タイル分割推論:人が十数画素にしか写らない問題への対処</h3>
+<p>高度 18 m から見ると、人は画像の中で十数画素ほどの大きさです。YOLO の入力(640×640)に画像全体を縮小すると、さらに小さくなります。
+実験では、<b>画像全体を 1 回で推論する方式では、高度 10〜30 m のすべてで人を 1 人も検出できませんでした</b>。
+そこで、画像を重なりのある 3×3 のタイルに分けて縮小せずに推論し、元画像の座標に戻してから NMS(重複した検出をまとめる処理)をかけるようにしました。
+高度 12 m 未満では 2×2 に切り替えて、速度を優先します。</p>
+
+<h3>(2) カメラを 30° 前へ傾けた機体を自作:立っている人の見逃しへの対処</h3>
+<p>最初は真下向きのカメラで捜索しましたが、<b>6 名中 3 名しか発見できませんでした</b>。見逃したのは、すべて立っている人・歩いている人です。
+真上からでは頭と肩しか写らず、AI の確信度が 0.5 程度にとどまったことが原因でした。
+カメラの角度を変えて比べたところ(表1)、斜めから見ると全身が写り、確信度が 0.8 以上に上がりました。
+そこで、PX4 の x500 にカメラを 30° 前へ傾けて付けた機体モデルとエアフレーム(機体設定)を作り、PX4 に登録しました。</p>
+
+<div class="two">
+  <figure><img src="img/cam_18m_0deg_3x3.jpg"><figcaption>真下向き(18 m):5 名中 3 名、確信度 0.5 前後</figcaption></figure>
+  <figure><img src="img/cam_18m_30deg_3x3.jpg"><figcaption>前へ 30°(18 m):5 名全員、確信度 0.57〜0.87</figcaption></figure>
+</div>
+
+<table>
+  <caption style="font-size:9pt; color:var(--sub); caption-side: top; text-align:left">表1 カメラの角度による人の検出(YOLO11m、3×3 タイル、正解 5 名)</caption>
+  <tr><th>高度</th><th>真下</th><th>前へ 30°</th><th>前へ 45°</th></tr>
+  <tr><td>18 m</td><td>3 名</td><td class="hl">5 名</td><td>5 名(画像の上端が地平線に近く、遠方の位置推定が不安定)</td></tr>
+</table>
+
+<h3>(3) 2 段階確認:誤検出への寄り道と誤報を防ぐ</h3>
+<p>救助の場面で一番困るのは、誤報で救助隊を空振りさせることです。巡回中の検出は「候補」として扱い、
+近づいて高度を下げ、近い距離の画像でもう一度 AI に判定させてから「確定」します。
+近距離で検出できない候補(木の影や車の一部を人と見誤ったものなど)は棄却します。
+近距離での推定位置の平均を確定位置にするので、位置の精度も上がります(初期推定の誤差 2.3 m → 確定後 0.4 m)。</p>
+
+<h3>(4) 姿勢を補正した位置推定</h3>
+<p>検出枠の中心にあたる画素から視線ベクトルを作ります。これをカメラの傾きと機体の姿勢(四元数)で地上の座標系(NED)に回し、地面との交点を求めます。
+前進中の機体は 10° 前後傾いているので、この補正がないと数 m ずれます。
+推論には約 0.2〜1 秒かかるため、<b>画像を受け取った瞬間の姿勢と位置を保存しておき、その値で計算</b>しています。これで、推論中に機体が動いてもずれません。</p>
+
+<h3>(5) 実行環境への配慮</h3>
+<ul>
+  <li>CUDA が使えれば YOLO11m を GPU で、使えなければ YOLO11s を CPU で動かす(自動で切り替える)。</li>
+  <li>ROS 2 とシステムの OpenCV は NumPy 1.x を前提にしている。NumPy 2 と衝突しないよう、AI の推論部分だけを仮想環境に分けた。</li>
+  <li>録画用のスクリプトと編集用のスクリプトを用意し、動画を誰でも同じ手順で作り直せるようにした。</li>
+</ul>
+
+<h2>4. 結果</h2>
+<table>
+  <caption style="font-size:9pt; color:var(--sub); caption-side: top; text-align:left">表2 捜索ミッションの評価(正解 6 名。評価用スクリプト <code>tests/evaluate_mission.py</code> で正解の位置と照合)</caption>
+  <tr><th class="l"></th><th>真下カメラ(改善前)</th><th>斜め 30° カメラ(改善後、4 回)</th></tr>
+  <tr><td class="l">発見した要救助者(再現率)</td><td>3 / 6(50%)</td><td class="hl">6 / 6(100%)× 4 回</td></tr>
+  <tr><td class="l">誤った確定(適合率)</td><td>0 件(100%)</td><td class="hl">0 件(100%)× 4 回</td></tr>
+  <tr><td class="l">誤検出として棄却した候補</td><td>10 件</td><td>1, 1, 0, 0 件</td></tr>
+  <tr><td class="l">確定位置の誤差 平均 / 最大</td><td>0.31 / 0.64 m</td><td>0.41 / 1.44 m</td></tr>
+  <tr><td class="l">飛行時間</td><td>486 s</td><td class="hl">237〜254 s</td></tr>
+</table>
+<div class="two">
+  <figure><img src="img/result_run1_nadir.png"><figcaption>改善前:立っている人 3 名を見逃し、誤検出の候補に何度も寄り道した</figcaption></figure>
+  <figure><img src="img/result_final.png"><figcaption>改善後:6 名全員を確定(○ 正解、● AI の確定位置、+ 巡回中の初期推定)</figcaption></figure>
+</div>
+<p>改善後は 4 回の飛行すべてで、6 名全員を誤りなく確定しました。
+斜めカメラで AI の確信度が全体に上がったため、候補のしきい値を上げても見逃しが出ませんでした。誤検出への寄り道が減ったことで、飛行時間もほぼ半分になっています。</p>
+
+<h2>5. 考察と今後の課題</h2>
+<ul>
+  <li><b>車の検出</b>:真上や斜め上から見た車は、COCO で学習したモデルでは検出が安定しませんでした。
+    上空から撮影したデータセット(VisDrone など)で追加学習すれば、車や瓦礫の下の人など、捜索対象を広げられます。</li>
+  <li><b>シミュレーションと実機の差</b>:Gazebo の人のモデルは数が少なく、影や地面の質感も単純です。
+    実機に移すには、服装・姿勢・天候・夜間(赤外線カメラ)の変化に対する評価が必要です。</li>
+  <li><b>遮蔽</b>:木や建物の陰にいる人は見えません。死角を減らすには、複数の方向から見るルート設計や、複数機での分担が考えられます。</li>
+  <li><b>実運用</b>:確定位置は緯度・経度の JSON で出力しています。この出力を救助隊の地図アプリへの送信や、物資を投下するドローンへの引き継ぎにつなげられます。</li>
+</ul>
+
+<h2>6. 使用した技術</h2>
+<p>
+PX4-Autopilot v1.18(SITL)、Gazebo Harmonic 8、ROS 2 Humble、Micro XRCE-DDS、ros_gz_image、
+Ultralytics YOLO11m / YOLO11s(COCO 学習済み、ONNX に変換)、ONNX Runtime GPU 1.20、OpenCV、Pillow、Gazebo Fuel の人・車・樹木モデル。
+推論は学習済みモデルのみを使っています(追加の学習はしていません)。
+検証環境は Ubuntu 22.04 と NVIDIA RTX 3060 Laptop GPU です。
+</p>
+</body>
+</html>
